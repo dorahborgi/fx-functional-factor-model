@@ -89,19 +89,3 @@ def extract_epsilon(vol_sq: dict, eps_pct: float = 5.0) -> dict:
         pct_used  = max(eps_pct, 10.0) if frac_zero > 0.20 else eps_pct
         eps_dict[key] = float(np.percentile(pos, pct_used))
     return eps_dict
-
-
-def check_panel(vol_matrices: dict, label: str = "") -> bool:
-    """Check that no pair contains NaN/inf values."""
-    ok = True
-    for key, df in vol_matrices.items():
-        vals  = df.values
-        n_nan = np.isnan(vals).sum()
-        n_inf = np.isinf(vals).sum()
-        if n_nan > 0 or n_inf > 0:
-            print(f"  ⚠ {key}: {n_nan} NaN, {n_inf} inf")
-            ok = False
-    if ok:
-        print(f"  ✅ Panel {'[' + label + '] ' if label else ''}clean — "
-                   f"0 NaN, 0 inf across {len(vol_matrices)} pairs")
-    return ok

@@ -825,7 +825,6 @@ def select_r(Y, F, k_max=5, criterion='IC2a'):
     return r_hat, ic_vals, V_vals, (eigenvalues, eigenvectors)
 
 
-
 # =============================================================================
 # VISUALISATIONS
 # =============================================================================
@@ -1548,7 +1547,6 @@ def plot_residual_heatmap(X, Chi_hat, mu, pairs, days=None,
     print(f"  ✓ {save_as}")
 
 
-
 def plot_decomposition_multiday(X, Chi_hat, Xi_hat, mu, tau, pairs,
                                 pair_idx=0,
                                 day_indices=None,
@@ -2011,58 +2009,6 @@ def plot_crisis_calm_fourpairs(results, save_prefix='06e'):
         )
 
 
-def plot_forecast(X, forecast, tau, pairs, pair_idx=0, n_context=10):
-    """
-    T+1 forecast of the intraday curve.
-    Back-transforms exp(x/2) if data are log-transformed.
-    """
-    i     = pair_idx
-    T     = X.shape[1]
-    is_log = X.min() < 0
-
-    if is_log:
-        to_vol = lambda x: np.exp(x / 2)
-        ylabel = "|r| avg  (= exp(x/2))"
-        fc_vol   = to_vol(forecast[i])
-        fc_lo    = to_vol(forecast[i] * 0.8)
-        fc_hi    = to_vol(forecast[i] * 1.2)
-        last_vol = to_vol(X[i, -1])
-        ctx_vols = [to_vol(X[i, t]) for t in range(T - n_context, T)]
-    else:
-        to_vol = lambda x: x
-        ylabel = "rv²"
-        fc_vol  = to_vol(forecast[i])
-        fc_lo   = fc_vol * 0.8
-        fc_hi   = fc_vol * 1.2
-        last_vol = to_vol(X[i, -1])
-        ctx_vols = [to_vol(X[i, t]) for t in range(T - n_context, T)]
-
-    fig, ax = plt.subplots(figsize=(12, 5))
-
-    # Context: last 10 days in grey (increasingly opaque)
-    for k, vol_k in enumerate(ctx_vols):
-        alpha = 0.06 + 0.30 * k / n_context
-        ax.plot(tau, vol_k, color='gray', alpha=alpha, linewidth=0.8)
-
-    ax.plot(tau, last_vol, color='black', linewidth=2,
-            label='Last observed day', zorder=5)
-    ax.plot(tau, fc_vol, color=COLORS[0], linewidth=2.5,
-            linestyle='--', label='T+1 Forecast', zorder=6)
-    ax.fill_between(tau, fc_lo, fc_hi,
-                    alpha=0.2, color=COLORS[0], label='± 20%')
-
-    ax.set_xlabel("τ [0=open → 1=close]")
-    ax.set_ylabel(ylabel)
-    ax.set_title(f"T+1 intraday curve forecast — {pairs[pair_idx]}",
-                 fontsize=13, fontweight='bold')
-    ax.legend(fontsize=11)
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(_fig('08_forecast.png'), dpi=150, bbox_inches='tight')
-    plt.close()
-    print("  ✓ 08_forecast.png")
-
-
 # =============================================================================
 # MAIN PIPELINE — PASTE THIS BLOCK IN YOUR NOTEBOOK
 # =============================================================================
@@ -2380,10 +2326,6 @@ def run_ffm(vol_matrices: dict,
     C_NT = min(np.sqrt(N), np.sqrt(T))
 
 
-
-
-
-
     print("\n" + "=" * 65)
     print(f"  r̂ = {r_hat} factor(s)  (spectral ratio)")
     r2_global = np.mean([
@@ -2424,122 +2366,3 @@ def run_ffm(vol_matrices: dict,
         # Estimation errors (Hallin et al. 2023, Section 3.2)
 
     }
-
-
-def plot_raw_one_day(vol_matrices: dict, date: str):
-    """
-    Plot the raw intraday curves (original data) of all pairs on a given date.
-
-    Parameters
-    ----------
-    vol_matrices : dict {str: DataFrame(days × minutes)}
-    date         : str  ex. '2008-10-09'
-    """
-    target = pd.Timestamp(date)
-    pairs  = list(vol_matrices.keys())
-    N      = len(pairs)
-
-    ncols = 4
-    nrows = int(np.ceil(N / ncols))
-    fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 3 * nrows))
-    axes = axes.flatten()
-
-    for i, (pair, mat) in enumerate(vol_matrices.items()):
-        ax = axes[i]
-
-        # Find the date in the index
-        mat_idx = pd.to_datetime(mat.index).normalize()
-        diffs   = np.abs((mat_idx - target).days)
-        t       = int(np.argmin(diffs))
-        actual  = str(mat_idx[t])[:10]
-
-        if diffs[t] > 3:
-            ax.set_title(f'{pair}\n⚠ {date} absent', fontsize=8, color='red')
-            axes[i].set_visible(True)
-            continue
-
-        row = mat.iloc[t].values.astype(float)
-        x   = np.linspace(0, 1, len(row))
-
-        ax.plot(x, row, lw=1.0, color=COLORS[i % len(COLORS)])
-        ax.set_title(pair, fontsize=9, fontweight='bold')
-        ax.set_xlabel('τ', fontsize=7)
-        ax.tick_params(labelsize=7)
-        ax.grid(True, lw=0.3, alpha=0.5)
-
-    for j in range(N, len(axes)):
-        axes[j].set_visible(False)
-
-    fig.suptitle(f'Raw data — all pairs — {actual}',
-                 fontsize=12, fontweight='bold', y=1.01)
-    plt.tight_layout()
-
-    fname = _fig(f'raw_{actual}.png')
-    plt.savefig(fname, dpi=150, bbox_inches='tight')
-    print(f"✓ {fname}")
-    plt.show()
-
-
-def plot_all_pairs_one_day(results, date: str):
-    """
-    Plot the intraday curves of all FX pairs on a given date.
-    
-    Parameters
-    ----------
-    results : dict returned by run_ffm()
-    date    : str  ex. '2008-10-09'
-    """
-    days  = pd.DatetimeIndex(results['days'])
-    X     = results['X']       # (N, T, M) — raw log-vol
-    mu    = results['mu']      # (N, M)    — mean per pair
-    tau   = results['tau']     # (M,)      — axe intraday [0,1]
-    pairs = results['pairs']   # list of pair names
-    N     = len(pairs)
-
-    # ── Find the index t of the date ─────────────────────────────────────
-    target = pd.Timestamp(date)
-    diffs  = np.abs((days - target).days)
-    t      = int(np.argmin(diffs))
-    actual = str(days[t])[:10]
-
-    if diffs[t] > 3:
-        print(f"⚠ Date {date} not found in the panel — closest: {actual}")
-    else:
-        print(f"Date : {actual}  (t={t})")
-
-    # ── Observed values on that day (X + mu) ─────────────────────────────
-    # X holds y_it = x_it - mu_i → add mu back to get x_it
-    x_day = X[:, t, :] + mu    # (N, M)
-
-    # ── Plot ────────────────────────────────────────────────────────────────
-    ncols = 4
-    nrows = int(np.ceil(N / ncols))
-    fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 3 * nrows),
-                             sharey=False)
-    axes = axes.flatten()
-
-    for i, pair in enumerate(pairs):
-        ax = axes[i]
-        ax.plot(tau, x_day[i], lw=1.2, color=COLORS[i])
-        ax.set_title(pair, fontsize=9, fontweight='bold')
-        ax.set_xlabel('τ  [0=open → 1=close]', fontsize=7)
-        ax.tick_params(labelsize=7)
-        ax.grid(True, lw=0.3, alpha=0.5)
-
-    # Hide empty axes
-    for j in range(N, len(axes)):
-        axes[j].set_visible(False)
-
-    fig.suptitle(f'Intraday log-volatility — all pairs — {actual}',
-                 fontsize=12, fontweight='bold', y=1.01)
-    plt.tight_layout()
-
-    fname = _fig(f'all_pairs_{actual}.png')
-    plt.savefig(fname, dpi=150, bbox_inches='tight')
-    print(f"✓ {fname}")
-    plt.show()
-
-
-
-
-

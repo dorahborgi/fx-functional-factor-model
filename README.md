@@ -12,7 +12,7 @@ a geometric study of how its loading subspace moves, and what that movement cost
 
 ---
 
-## TL;DR
+## Summary
 
 - **Data → curves.** 5-minute FX returns from HistData/Dukascopy are turned into one smooth
   log-volatility curve per pair and trading day (288 points, 17:00 → 16:55 New York), giving a
@@ -26,7 +26,8 @@ a geometric study of how its loading subspace moves, and what that movement cost
   rotating it, while structural drift (2017+, 2019, 2023–24) rotates it.
 - **Rotation costs forecast accuracy.** Freezing the 2014 loadings degrades one-step forecasts, and the
   degradation grows with the Grassmann distance (ρ ≈ 0.26). Among the forecasting models compared,
-  a functional HAR on the idiosyncratic part does best: **−20% MAFE and −41% MSFE** against a random-walk benchmark.
+  the gains come from the idiosyncratic part: a functional HAR cuts the error by **≈20% (MAFE) and ≈41% (MSFE)**
+  against a random-walk benchmark (on the smoothed target), while the factor score is close to a random walk.
 
 <p align="center">
   <img src="docs/images/factor_score.png" width="95%" alt="Estimated factor score 2014-2025"><br>
@@ -53,9 +54,9 @@ with scalar factor scores $u_{kt}$ (common daily shocks), functional loadings $b
 | **Proxy & smoothing** | $\log(r^2+\varepsilon_i)$ (removes the right skew of $\lvert r\rvert$), P-splines with GCV-selected $\lambda_i$ | [`ffm_transform.py`](src/ffm_transform.py), [`ffm_smoothing.py`](src/ffm_smoothing.py) |
 | **Estimation** | Gram matrix of the centred panel → leading eigenpairs → scores $\hat u$, loadings $\hat b$, common $\hat\chi$, idiosyncratic $\hat\xi$ | [`ffm_fx_real.py`](src/ffm_fx_real.py), [`factor_model_fcts.py`](src/factor_model_fcts.py) |
 | **Number of factors** | Functional Bai–Ng IC, eigenvalue / growth ratios (Ahn & Horenstein), ABC (Alessi, Barigozzi & Capasso) | [`ffm_fx_real.py`](src/ffm_fx_real.py), [`abc_method.py`](src/abc_method.py) |
-| **Stability** | Rolling windows → Grassmann distance $d_G = \arccos\lvert\langle V, V'\rangle\rvert$ between loading subspaces; simulated null; CUSUM, Bai–Perron, Hamed–Rao | [`ffm_stability.py`](src/ffm_stability.py), [`dg_simulation.py`](src/dg_simulation.py) |
-| **Break tests** | Dette & Kutta (2021) change-point tests on the eigenvalues / eigenfunctions of the covariance operator | [`dette_kutta.py`](src/dette_kutta.py) |
-| **Forecasting** | Score: RW / AR / ARIMA / ARFIMA / HAR / GARCH. Idiosyncratic: functional Ljung–Box test, then RW / FAR (FPCA + VAR) / functional HAR. Recombination on the original scale, MSFE / MAFE | [`ffm_forecasting.py`](src/ffm_forecasting.py) |
+| **Stability** | Rolling $\hat r$ and leading eigenvalue; Grassmann distance $d_G = \arccos\lvert\langle V, V'\rangle\rvert$ between rolling loading subspaces; simulated null distribution; CUSUM and Bai–Perron (HAC) | [`ffm_stability.py`](src/ffm_stability.py), [`dg_simulation.py`](src/dg_simulation.py) |
+| **Break tests** | Dette & Kutta (2021) relevant-change tests on the leading eigenvalue / eigenfunction of the covariance operator | [`dette_kutta.py`](src/dette_kutta.py) |
+| **Forecasting** | Score: ADF / KPSS, then random walk or AR(p) (BIC). Idiosyncratic: functional Ljung–Box test, then RW / FAR (FPCA + VAR) / functional HAR. Recombination on the original scale, MAFE / MSFE against raw and smoothed targets | [`ffm_forecasting.py`](src/ffm_forecasting.py) |
 
 Loadings are identified only up to rotation, so stability is studied on the **subspace**
 they span (the Grassmann manifold), not on individual loading curves. A test on the mean loading would
@@ -116,8 +117,8 @@ fx-functional-factor-model/
 │   ├── ffm_fx_real.py            # FFM estimation pipeline (run_ffm) + core plots
 │   ├── factor_model_fcts.py      # panel construction, Gram matrix, rolling-window FFM
 │   ├── abc_method.py             # ABC selection of the number of factors
-│   ├── ffm_stability.py          # Grassmann distances, CUSUM, Bai–Perron, Hamed–Rao, rolling diagnostics
-│   ├── dg_simulation.py          # simulated / bootstrap null distribution of the Grassmann distance
+│   ├── ffm_stability.py          # Grassmann distances, CUSUM, Bai–Perron, rolling eigenvalue and loadings
+│   ├── dg_simulation.py          # simulated null distribution of the Grassmann distance
 │   ├── dette_kutta.py            # Dette & Kutta (2021) eigensystem break tests
 │   ├── ffm_forecasting.py        # factor & idiosyncratic forecasting, reconstruction, evaluation
 │   ├── ffm_eda.py, ffm_eda_focused.py, functions.py   # exploratory analysis & plotting helpers
@@ -127,10 +128,10 @@ fx-functional-factor-model/
 │   ├── download_dukascopy.py     # Dukascopy ticks → 5-min bars (async)
 │   └── build_dataset.py          # raw data → (trading day × 5-min) matrices
 ├── notebooks/
-│   ├── 01_data_eda_ffm_rolling.ipynb   # data, EDA, FFM fit, number of factors, rolling r̂
-│   ├── 02_forecasting.ipynb            # factor & idiosyncratic forecasts, model comparison
-│   ├── 03_stability.ipynb              # Grassmann geometry, null simulation, break tests
-│   └── 04_raw_ffm.ipynb                # robustness: pipeline on the unsmoothed proxy
+│   ├── 01_data_eda_ffm_rolling.ipynb   # data, EDA, FFM fit, number of factors, rolling r̂ (ch. 3–4, §5.1)
+│   ├── 02_forecasting.ipynb            # score & idiosyncratic forecasts, model comparison (ch. 6)
+│   ├── 03_stability.ipynb              # Grassmann geometry, null simulation, break tests (ch. 5)
+│   └── 04_raw_ffm.ipynb                # robustness: pipeline on the unsmoothed proxy (app. E)
 ├── data/README.md                # data sources and how to rebuild the dataset
 ├── docs/                         # final presentation + README figures
 └── figures/                      # generated figures (git-ignored)
@@ -185,15 +186,15 @@ ffm    = run_ffm(curves, k_max=5, min_coverage=0.7, silent=True)
 
 ## References
 
-- Hallin, M., Nisol, G. & Tavakoli, S. (2023). Factor models for high-dimensional functional time series I & II. *Journal of Time Series Analysis*.
-- Ahn, S. C. & Horenstein, A. R. (2013). Eigenvalue ratio test for the number of factors. *Econometrica*.
-- Alessi, L., Barigozzi, M. & Capasso, M. (2010). Improved penalization for determining the number of factors in approximate factor models. *Statistics & Probability Letters*.
-- Bai, J. & Ng, S. (2002). Determining the number of factors in approximate factor models. *Econometrica*.
-- Bai, J. & Perron, P. (1998). Estimating and testing linear models with multiple structural changes. *Econometrica*.
-- Dette, H. & Kutta, T. (2021). Detecting structural breaks in eigensystems of functional time series. *Electronic Journal of Statistics*.
-- Hamed, K. H. & Rao, A. R. (1998). A modified Mann–Kendall trend test for autocorrelated data. *Journal of Hydrology*.
-- Corsi, F. (2009). A simple approximate long-memory model of realized volatility. *Journal of Financial Econometrics*.
-- Andersen, T. G. & Bollerslev, T. (1997). Intraday periodicity and volatility persistence in financial markets. *Journal of Empirical Finance*.
+- Hallin, M., Nisol, G. & Tavakoli, S. (2023). Factor models for high-dimensional functional time series I: Representation results; II: Estimation and forecasting. *Journal of Time Series Analysis*.
+- Ahn, S. C. & Horenstein, A. R. (2013). Eigenvalue ratio test for the number of factors. *Econometrica*, 81(3).
+- Alessi, L., Barigozzi, M. & Capasso, M. (2010). Improved penalization for determining the number of factors in approximate factor models. *Statistics & Probability Letters*, 80.
+- Bai, J. & Ng, S. (2002). Determining the number of factors in approximate factor models. *Econometrica*, 70(1).
+- Bai, J. & Perron, P. (1998). Estimating and testing linear models with multiple structural changes. *Econometrica*, 66(1).
+- Breitung, J. & Eickmeier, S. (2011). Testing for structural breaks in dynamic factor models. *Journal of Econometrics*, 163(1).
+- Dette, H. & Kutta, T. (2021). Detecting structural breaks in eigensystems of functional time series. *Electronic Journal of Statistics*, 15(1).
+- Eilers, P. H. C. & Marx, B. D. (1996). Flexible smoothing with B-splines and penalties. *Statistical Science*, 11(2).
+- Kearney, F., Shang, H. L. & Zhao, Y. (2025). Intraday FX volatility-curve forecasting with functional GARCH approaches. *arXiv:2311.18477*.
 
 ## License
 

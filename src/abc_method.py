@@ -21,17 +21,12 @@ Algorithm
 
 import numpy as np
 from factor_model_fcts import build_gram_matrix, decompose_gram
-from scipy.linalg import eigh
 
 
 def g_IC1a(N, T):
     """Penalty g(N,T) for IC1a — Hallin, Nisol & Tavakoli (2023), Sec 4.2."""
     return np.sqrt((N + T) / (N * T)) * np.log(N * T / (N + T))
 
-def g_IC2a(N, T):
-    """Penalty g(N,T) for IC2a — Hallin, Nisol & Tavakoli (2023), Sec 4.2."""
-    C_NT = min(np.sqrt(N), np.sqrt(T))
-    return np.sqrt((N + T) / (N * T)) * np.log(C_NT ** 2)
 
 def shuffle_rows(Y, seed=None):
     """Shuffle the rows of Y (cross-sectional order)"""

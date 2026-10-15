@@ -37,10 +37,7 @@ FFM PANEL STRUCTURE:
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 from scipy.linalg import eigh
-import time
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -49,110 +46,6 @@ warnings.filterwarnings("ignore")
 
 """
 # Source: Claude IA ----------------------------------------------------------------
-def build_overnight_session(vol_matrices: dict,
-                            session_start: str = '17:00',
-                            session_end:   str = '16:55') -> dict:
-    """
-    Build TRUE overnight sessions by combining two consecutive calendar days.
- 
-    For the session labelled day t:
-      - τ ∈ [0.00, 0.29] : columns [17:00 → 23:55] from day t-1
-      - τ ∈ [0.29, 1.00] : columns [00:00 → 16:55] from day t
- 
-    This is the correct construction: the row labelled 2008-10-09 contains
-    the evening of 2008-10-08 (17:00→23:55) and the morning of 2008-10-09
-    (00:00→16:55).
- 
-    The first calendar day is lost (no day t-1 available for it).
-    Friday sessions are kept as-is (17:00 Fri → 16:55 Sat, but only Sat
-    data up to 16:55 — typically sparse/absent → many NaN, handled by
-    min_coverage in build_panel_from_matrices).
- 
-    Parameters
-    ----------
-    vol_matrices   : dict {str: DataFrame(days × minutes)}
-                     columns must be datetime.time objects
-    session_start  : str 'HH:MM' — start of session (default '17:00')
-    session_end    : str 'HH:MM' — end of session   (default '16:55')
- 
-    Returns
-    -------
-    dict {str: DataFrame}
-        Same keys, new rows where each row = true overnight session.
-        Index = day t (the day the session ends at session_end).
-    """
-    t_start = pd.Timestamp(f'2000-01-01 {session_start}').time()
-    t_end   = pd.Timestamp(f'2000-01-01 {session_end}').time()
- 
-    import datetime
- 
-    def to_time(c):
-        """Convert any column label to datetime.time."""
-        if isinstance(c, datetime.time):
-            return c
-        try:
-            return pd.Timestamp(f'2000-01-01 {c}').time()
-        except Exception:
-            return pd.Timestamp(str(c)).time()
- 
-    result = {}
-    for pair, df in vol_matrices.items():
-        df2   = df.copy()
-        df2.index   = pd.to_datetime(df2.index).normalize()
-        df2         = df2.sort_index()
-        dates       = df2.index.normalize().unique()
- 
-        # Normalise columns to datetime.time for comparison
-        col_times = [to_time(c) for c in df2.columns]
- 
-        cols_evening = [c for c, t in zip(df2.columns, col_times)
-                        if t >= t_start]   # 17:00 → 23:55
-        cols_morning = [c for c, t in zip(df2.columns, col_times)
-                        if t <= t_end]     # 00:00 → 16:55
- 
-        session_cols = cols_evening + cols_morning
- 
-        rows = {}
-        for i in range(1, len(dates)):
-            day_prev = dates[i - 1]   # t-1 : provides evening part
-            day_curr = dates[i]       # t   : provides morning part
- 
-            evening = df2.loc[df2.index == day_prev, cols_evening]
-            morning = df2.loc[df2.index == day_curr, cols_morning]
- 
-            if len(evening) == 0 or len(morning) == 0:
-                continue
- 
-            # Concatenate horizontally: [evening | morning]
-            session_row = pd.concat(
-                [evening.iloc[0], morning.iloc[0]]
-            )
-            rows[day_curr] = session_row
- 
-        if not rows:
-            continue
- 
-        new_df       = pd.DataFrame(rows).T
-        if '00:00:00' in new_df.columns:
-            new_df['00:00:00'] = (new_df['23:55:00'] + new_df['00:05:00']) / 2
-        new_df.index = pd.DatetimeIndex(new_df.index).normalize()
-        new_df.columns = session_cols
-        result[pair] = new_df
- 
-    # Report
-    sample = next(iter(result.values()))
-    n_eve  = len(cols_evening)
-    n_mor  = len(cols_morning)
-    n_tot  = len(sample.columns)
-    tau_midnight = n_eve / n_tot if n_tot > 0 else 0
-    print(f"  build_overnight_session [{session_start} → {session_end}]:")
-    print(f"    Rows  : {len(sample)}  (first day lost)")
-    print(f"    Cols  : {n_tot}  ({n_eve} evening + {n_mor} morning)")
-    print(f"    τ=0.00 = {session_start}  |  "
-          f"τ={tau_midnight:.2f} = 00:00  |  "
-          f"τ=1.00 = {session_end}")
- 
-    return result
 #---------------------------------------------------------------------------------
 
 def build_panel_from_matrices(vol_matrices: dict, min_coverage: float = 0.8,
@@ -408,14 +301,6 @@ def build_panel_from_matrices(vol_matrices: dict, min_coverage: float = 0.8,
 """
 3. CENTERING ===============================================================================================
 """
-def centering_data(X):
-    """
-    μ̂_i(τ) = (1/T) Σ_t x_{it}(τ)   — mean intraday profile of pair i
-    y_{it}(τ) = x_{it}(τ) − μ̂_i(τ)  — centred panel
-    """
-    mu = X.mean(axis=1)              # (N, M)
-    Y  = X - mu[:, np.newaxis, :]    # (N, T, M)
-    return Y, mu
 
 """
 4. NORMALIZATION =============================================================================
@@ -471,16 +356,6 @@ def decompose_gram(F, k_max):
 7. SELECTION OF NUMBER OF FACTORS r => SPECTRAL RATIO ============================================================================
 """
 
-def specral_ratio_criterion(Y,F,k_max=10):
-    """
-    Spectral ratio criterion (robust when N << T):
-    r̂_ratio = argmax_l λ̂_l / λ̂_{l+1}  (elbow of the scree plot)
-    Corresponds to ED estimator (Ahn & Horenstein 2013)
-    """
-    eigenvalues, _ = decompose_gram(F, k_max=k_max)
-    ratios  = eigenvalues[:-1] / (eigenvalues[1:] + 1e-14)  # avoid division by zero
-    r_ratio = int(np.argmax(ratios)) + 1
-    return r_ratio, ratios
 
 """
 8. FACTORS AND LOADINGS ESTIMATION + COMMON AND IDIOSYNCRATIC COMPONENTS ESTIMATION=============================
@@ -644,65 +519,3 @@ def compute_daily_avg_vol(X: np.ndarray, days: pd.DatetimeIndex,
         daily_mean = np.exp(X / 2).mean(axis=(0, 2))
 
     return pd.Series(daily_mean, index=pd.DatetimeIndex(days), name="avg_vol")
-
-
-def avg_vol_from_matrices(vol_matrices: dict, start_date: str = '2014-01-01') -> pd.Series:
-    """
-    Compute mean daily volatility from raw vol_matrices dict.
-    Each DataFrame is (days x intraday intervals) of log-returns.
-    Returns a Series with one value per day (mean |r| across pairs).
-    """
-    daily_means = []
-    for pair, df in vol_matrices.items():
-        df_f = df.loc[df.index >= start_date]
-        daily_means.append(df_f.abs().mean(axis=1).rename(pair))
-
-    panel = pd.concat(daily_means, axis=1)
-    avg   = panel.mean(axis=1)
-    avg.index = pd.to_datetime(avg.index)
-    avg.name  = 'avg_vol'
-    return avg
-
-
-def check_residual_common_structure(Xi_hat: np.ndarray, pairs_name: list,
-                                    K: int = 3) -> tuple:
-    """
-    Check whether idiosyncratic components still share common structure across pairs.
-    High cross-sectional variance or high cross-pair correlations suggest K is too small.
-    """
-    N, T, n_tau = Xi_hat.shape
-
-    cross_mean = Xi_hat.mean(axis=0)
-    var_cross  = np.var(cross_mean)
-    var_total  = np.var(Xi_hat)
-    ratio      = var_cross / var_total
-
-    print(f"Residual common variance: {ratio*100:.2f}% of total variance")
-    if ratio > 0.05:
-        print("WARNING: residual common structure > 5% — K may be too small")
-    else:
-        print("OK: residual common structure is small — K=1 appears sufficient")
-
-    norms = np.sqrt(np.mean(Xi_hat**2, axis=2))
-    corr_matrix = np.corrcoef(norms)
-
-    print(f"\nCross-pair idiosyncratic correlations:")
-    print(f"{'─'*45}")
-    print(f"{'':12}", end='')
-    for name in pairs_name:
-        print(f"{name[:6]:>8}", end='')
-    print()
-    for i, name in enumerate(pairs_name):
-        print(f"{name:<12}", end='')
-        for j in range(N):
-            print(f"{corr_matrix[i,j]:>8.2f}", end='')
-        print()
-
-    mean_offdiag = (corr_matrix.sum() - np.trace(corr_matrix)) / (N*(N-1))
-    print(f"\nMean off-diagonal correlation: {mean_offdiag:.4f}")
-    if abs(mean_offdiag) > 0.1:
-        print("WARNING: significant cross-pair correlations")
-    else:
-        print("OK: weak cross-pair correlations")
-
-    return ratio, corr_matrix
