@@ -1,0 +1,26 @@
+# Tested with Python 3.11 (numpy 1.26, pandas 2.2, scipy 1.14, statsmodels 0.14, arch 8.0)
+
+# Core scientific stack
+numpy>=1.24,<2.0
+pandas>=2.0,<3.0
+scipy>=1.11
+pyarrow>=14.0,<20
+
+# Econometrics / statistics
+statsmodels>=0.14
+arch>=6.3
+scikit-learn>=1.3
+
+# Plotting
+matplotlib>=3.7
+seaborn>=0.13
+
+# Data download
+histdata>=1.1          # HistData.com 1-minute bars
+aiohttp>=3.9           # async Dukascopy downloader
+tqdm>=4.66
+
+# Notebooks & caching
+joblib>=1.3
+jupyter>=1.0
+ipykernel>=6.0

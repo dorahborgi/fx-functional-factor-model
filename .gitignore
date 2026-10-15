@@ -1,0 +1,23 @@
+# ── Data (large / licensed — rebuilt with scripts/, see data/README.md) ──
+data/*
+!data/README.md
+
+# ── Generated figures (curated README figures live in docs/images/) ──
+figures/*
+!figures/.gitkeep
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# ── Jupyter ──
+.ipynb_checkpoints/
+
+# ── OS / editors ──
+.DS_Store
+.vscode/
+.idea/
